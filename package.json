@@ -1,0 +1,20 @@
+{
+    "name": "indexer-quinty",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "ponder dev",
+        "start": "ponder start",
+        "codegen": "ponder codegen"
+    },
+    "dependencies": {
+        "@ponder/core": "0.6.0",
+        "hono": "^4.11.3",
+        "viem": "^2.21.0",
+        "zod": "^3.23.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "typescript": "^5.5.0"
+    }
+}
