@@ -10,29 +10,13 @@ export default createConfig({
             chainId: 84532,
             transport: http(process.env.PONDER_RPC_URL_84532 || "https://sepolia.base.org"),
         },
-        mantleSepolia: {
-            chainId: 5003,
-            transport: http(process.env.PONDER_RPC_URL_5003 || "https://rpc.sepolia.mantle.xyz"),
-        },
-        arbitrumSepolia: {
-            chainId: 421614,
-            transport: http(process.env.PONDER_RPC_URL_421614 || "https://sepolia-rollup.arbitrum.io/rpc"),
-        },
     },
     contracts: {
         Quinty: {
             abi: QuintyAbi,
             network: {
                 baseSepolia: {
-                    address: "0xdB5e489C756D4D2028CCb3515c04DaD134AB03c7",
-                    startBlock: 19000000,
-                },
-                mantleSepolia: {
-                    address: "0x0000000000000000000000000000000000000000",
-                    startBlock: 19000000,
-                },
-                arbitrumSepolia: {
-                    address: "0x0000000000000000000000000000000000000000",
+                    address: "0x1c52AAc4f772E2eAbcAb6A0aC7a218d3d5661d85",
                     startBlock: 19000000,
                 },
             },
@@ -41,15 +25,7 @@ export default createConfig({
             abi: QuintyReputationAbi,
             network: {
                 baseSepolia: {
-                    address: "0xD4c6d0fBe9A1F11e7b6A23E5F857C020B89f0763",
-                    startBlock: 19000000,
-                },
-                mantleSepolia: {
-                    address: "0x0000000000000000000000000000000000000000",
-                    startBlock: 19000000,
-                },
-                arbitrumSepolia: {
-                    address: "0x0000000000000000000000000000000000000000",
+                    address: "0xeA6C17Bafa574f33f2ceCfD64E553A17444e5E94",
                     startBlock: 19000000,
                 },
             },

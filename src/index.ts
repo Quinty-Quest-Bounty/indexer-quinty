@@ -54,8 +54,8 @@ ponder.on("Quinty:BountyCreated", async ({ event, context }) => {
             await User.update({
                 id: creatorAddr,
                 data: {
-                    bountiesCreated: user.bountiesCreated + 1,
-                    totalVolumeCreated: user.totalVolumeCreated + amount,
+                    bountiesCreated: user.bounties_created + 1,
+                    totalVolumeCreated: user.total_volume_created + amount,
                 },
             });
         } else {
@@ -155,8 +155,8 @@ ponder.on("Quinty:BountyResolved", async ({ event, context }) => {
                 await User.update({
                     id: userId,
                     data: {
-                        bountiesWon: user.bountiesWon + 1,
-                        totalVolumeWon: user.totalVolumeWon + amountPerWinner,
+                        bountiesWon: user.bounties_won + 1,
+                        totalVolumeWon: user.total_volume_won + amountPerWinner,
                     },
                 });
             } else {
