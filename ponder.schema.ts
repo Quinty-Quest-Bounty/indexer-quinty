@@ -5,15 +5,17 @@ export default createSchema((p) => ({
         {
             id: p.string(),
             creator: p.string(),
-            amount: p.bigint(),
-            deadline: p.bigint(),
-            status: p.string(),
+            title: p.string(),
             description: p.string(),
-            title: p.string().optional(),
-            requirements: p.string().optional(),
-            images: p.string().optional(),
+            amount: p.bigint(),
+            openDeadline: p.bigint(),
+            judgingDeadline: p.bigint(),
+            slashPercent: p.bigint(),
+            status: p.string(),
+            selectedWinner: p.string().optional(),
+            selectedSubmissionId: p.bigint().optional(),
+            totalDeposits: p.bigint(),
             timestamp: p.bigint(),
-            hasOprec: p.boolean(),
         },
         {
             creatorIndex: p.index("creator"),
@@ -24,14 +26,51 @@ export default createSchema((p) => ({
         {
             id: p.string(),
             bountyId: p.string().references("Bounty.id"),
-            solver: p.string(),
+            submitter: p.string(),
             ipfsCid: p.string(),
+            socialHandle: p.string(),
+            deposit: p.bigint(),
             timestamp: p.bigint(),
             isWinner: p.boolean(),
-            isRevealed: p.boolean(),
         },
         {
             bountyIdIndex: p.index("bountyId"),
+            submitterIndex: p.index("submitter"),
+        }
+    ),
+    Quest: p.createTable(
+        {
+            id: p.string(),
+            creator: p.string(),
+            title: p.string(),
+            description: p.string(),
+            totalAmount: p.bigint(),
+            perQualifier: p.bigint(),
+            maxQualifiers: p.bigint(),
+            qualifiersCount: p.int(),
+            deadline: p.bigint(),
+            createdAt: p.bigint(),
+            resolved: p.boolean(),
+            cancelled: p.boolean(),
+            requirements: p.string(),
+            timestamp: p.bigint(),
+        },
+        {
+            creatorIndex: p.index("creator"),
+        }
+    ),
+    QuestEntry: p.createTable(
+        {
+            id: p.string(),
+            questId: p.string().references("Quest.id"),
+            solver: p.string(),
+            ipfsProofCid: p.string(),
+            socialHandle: p.string(),
+            timestamp: p.bigint(),
+            status: p.int(), // 0=Pending, 1=Approved, 2=Rejected
+        },
+        {
+            questIdIndex: p.index("questId"),
             solverIndex: p.index("solver"),
         }
     ),
@@ -41,5 +80,7 @@ export default createSchema((p) => ({
         bountiesWon: p.int(),
         totalVolumeCreated: p.bigint(),
         totalVolumeWon: p.bigint(),
+        questsCreated: p.int(),
+        questsCompleted: p.int(),
     }),
 }));

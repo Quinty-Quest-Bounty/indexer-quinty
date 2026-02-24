@@ -2,9 +2,14 @@ import { createConfig } from "@ponder/core";
 import { http } from "viem";
 
 import { QuintyAbi } from "./abis/Quinty";
+import { QuestAbi } from "./abis/Quest";
 import { QuintyReputationAbi } from "./abis/QuintyReputation";
 
 export default createConfig({
+    database: {
+        kind: "postgres",
+        connectionString: process.env.DATABASE_URL,
+    },
     networks: {
         baseSepolia: {
             chainId: 84532,
@@ -16,8 +21,17 @@ export default createConfig({
             abi: QuintyAbi,
             network: {
                 baseSepolia: {
-                    address: "0x1c52AAc4f772E2eAbcAb6A0aC7a218d3d5661d85",
-                    startBlock: 19000000,
+                    address: "0xdB6511DC9869a10Ed00C3706Ff9332820db87463",
+                    startBlock: 37200000,
+                },
+            },
+        },
+        Quest: {
+            abi: QuestAbi,
+            network: {
+                baseSepolia: {
+                    address: "0xFeFAB11BA3Bc2d74B8B4804044f39A12E55BE4ae",
+                    startBlock: 37200000,
                 },
             },
         },
@@ -25,8 +39,8 @@ export default createConfig({
             abi: QuintyReputationAbi,
             network: {
                 baseSepolia: {
-                    address: "0xeA6C17Bafa574f33f2ceCfD64E553A17444e5E94",
-                    startBlock: 19000000,
+                    address: "0xE84dA988177707e9e8371894C082049D2C4F5e5e",
+                    startBlock: 37200000,
                 },
             },
         },
