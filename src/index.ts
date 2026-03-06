@@ -1,176 +1,313 @@
 import { ponder } from "@/generated";
 
-// Helper to fetch IPFS metadata
-async function fetchMetadata(cid: string) {
-    if (!cid || cid.length < 20) return null;
-    try {
-        const response = await fetch(`https://ipfs.io/ipfs/${cid}`, { signal: AbortSignal.timeout(5000) });
-        if (response.ok) {
-            return await response.json();
-        }
-    } catch (e) {
-        console.error(`Error fetching IPFS metadata for ${cid}:`, e);
-    }
-    return null;
+const STATUS_MAP: Record<number, string> = {
+    0: "OPEN",
+    1: "JUDGING",
+    2: "RESOLVED",
+    3: "SLASHED",
+};
+
+async function getOrCreateUser(User: any, address: string) {
+    const id = address.toLowerCase();
+    const existing = await User.findUnique({ id });
+    if (existing) return existing;
+    return await User.create({
+        id,
+        data: {
+            bountiesCreated: 0,
+            bountiesWon: 0,
+            totalVolumeCreated: 0n,
+            totalVolumeWon: 0n,
+            questsCreated: 0,
+            questsCompleted: 0,
+        },
+    });
 }
+
+// =====================
+// QUINTY BOUNTY EVENTS
+// =====================
 
 ponder.on("Quinty:BountyCreated", async ({ event, context }) => {
     const { Bounty, User } = context.db;
-    const { id, creator, amount, deadline, hasOprec } = event.args;
+    const { id, creator, title, amount, openDeadline, judgingDeadline, slashPercent } = event.args;
 
     try {
         const creatorAddr = creator.toLowerCase();
-        // Fetch full bounty data from contract to get description (IPFS CID)
-        const bountyData = await context.client.readContract({
-            abi: context.contracts.Quinty.abi,
-            address: context.contracts.Quinty.address,
-            functionName: "getBountyData",
-            args: [id],
-        });
+        const bountyId = `${context.network.name}-${id}`;
 
-        const descriptionCid = bountyData[1];
-        const metadata = await fetchMetadata(descriptionCid);
+        // Read description from contract
+        let description = "";
+        try {
+            const bountyData = await context.client.readContract({
+                abi: context.contracts.Quinty.abi,
+                address: context.contracts.Quinty.address,
+                functionName: "getBounty",
+                args: [id],
+            });
+            description = bountyData[2]; // description is index 2
+        } catch (e) {
+            console.error(`Failed to read bounty description for ${id}:`, e);
+        }
 
         await Bounty.create({
-            id: `${context.network.name}-${id}`,
+            id: bountyId,
             data: {
                 creator: creatorAddr,
-                amount: amount,
-                deadline: deadline,
-                status: hasOprec ? "OPREC" : "OPEN",
-                description: descriptionCid,
-                title: metadata?.title || "",
-                requirements: metadata?.requirements ? JSON.stringify(metadata.requirements) : "[]",
-                images: metadata?.images ? JSON.stringify(metadata.images) : "[]",
+                title,
+                description,
+                amount,
+                openDeadline,
+                judgingDeadline,
+                slashPercent,
+                status: "OPEN",
+                totalDeposits: 0n,
                 timestamp: event.block.timestamp,
-                hasOprec: hasOprec,
             },
         });
 
-        // Update Creator Stats
-        const user = await User.findUnique({ id: creatorAddr });
-
-        if (user) {
-            await User.update({
-                id: creatorAddr,
-                data: {
-                    bountiesCreated: user.bounties_created + 1,
-                    totalVolumeCreated: user.total_volume_created + amount,
-                },
-            });
-        } else {
-            await User.create({
-                id: creatorAddr,
-                data: {
-                    bountiesCreated: 1,
-                    bountiesWon: 0,
-                    totalVolumeCreated: amount,
-                    totalVolumeWon: 0n,
-                },
-            });
-        }
+        const user = await getOrCreateUser(User, creatorAddr);
+        await User.update({
+            id: creatorAddr,
+            data: {
+                bountiesCreated: user.bountiesCreated + 1,
+                totalVolumeCreated: user.totalVolumeCreated + amount,
+            },
+        });
     } catch (e) {
-        console.error(`Error processing BountyCreated event for ID ${id} on ${context.network.name}:`, e);
+        console.error(`Error processing BountyCreated ${id}:`, e);
     }
 });
 
 ponder.on("Quinty:SubmissionCreated", async ({ event, context }) => {
-    const { Submission } = context.db;
-    const { bountyId, subId, solver, ipfsCid } = event.args;
+    const { Submission, Bounty } = context.db;
+    const { bountyId, submissionId, submitter, ipfsCid, socialHandle, deposit } = event.args;
+
+    const netBountyId = `${context.network.name}-${bountyId}`;
 
     await Submission.create({
-        id: `${context.network.name}-${bountyId}-${subId}`,
+        id: `${netBountyId}-${submissionId}`,
         data: {
-            bountyId: `${context.network.name}-${bountyId}`,
-            solver: solver.toLowerCase(),
-            ipfsCid: ipfsCid,
+            bountyId: netBountyId,
+            submitter: submitter.toLowerCase(),
+            ipfsCid,
+            socialHandle,
+            deposit,
             timestamp: event.block.timestamp,
             isWinner: false,
-            isRevealed: false,
+        },
+    });
+
+    // Update totalDeposits on bounty
+    try {
+        const bounty = await Bounty.findUnique({ id: netBountyId });
+        if (bounty) {
+            await Bounty.update({
+                id: netBountyId,
+                data: { totalDeposits: bounty.totalDeposits + deposit },
+            });
+        }
+    } catch (_) {}
+});
+
+ponder.on("Quinty:BountyMovedToJudging", async ({ event, context }) => {
+    const { Bounty } = context.db;
+    const { bountyId } = event.args;
+
+    await Bounty.update({
+        id: `${context.network.name}-${bountyId}`,
+        data: { status: "JUDGING" },
+    });
+});
+
+ponder.on("Quinty:WinnerSelected", async ({ event, context }) => {
+    const { Bounty, Submission, User } = context.db;
+    const { bountyId, winner, submissionId, reward } = event.args;
+
+    const netBountyId = `${context.network.name}-${bountyId}`;
+    const winnerAddr = winner.toLowerCase();
+
+    await Bounty.update({
+        id: netBountyId,
+        data: {
+            status: "RESOLVED",
+            selectedWinner: winnerAddr,
+            selectedSubmissionId: submissionId,
+        },
+    });
+
+    // Mark winning submission
+    try {
+        await Submission.update({
+            id: `${netBountyId}-${submissionId}`,
+            data: { isWinner: true },
+        });
+    } catch (_) {}
+
+    // Update winner stats
+    const user = await getOrCreateUser(User, winnerAddr);
+    await User.update({
+        id: winnerAddr,
+        data: {
+            bountiesWon: user.bountiesWon + 1,
+            totalVolumeWon: user.totalVolumeWon + reward,
         },
     });
 });
 
-ponder.on("Quinty:WinnersSelected", async ({ event, context }) => {
-    const { Submission, Bounty } = context.db;
-    const { bountyId, winners, submissionIds } = event.args;
+ponder.on("Quinty:BountySlashed", async ({ event, context }) => {
+    const { Bounty } = context.db;
+    const { bountyId } = event.args;
 
     await Bounty.update({
         id: `${context.network.name}-${bountyId}`,
+        data: { status: "SLASHED" },
+    });
+});
+
+// =====================
+// QUEST EVENTS
+// =====================
+
+ponder.on("Quest:QuestCreated", async ({ event, context }) => {
+    const { Quest, User } = context.db;
+    const { id, creator, title, perQualifier, maxQualifiers, deadline } = event.args;
+
+    try {
+        const creatorAddr = creator.toLowerCase();
+        const questId = `${context.network.name}-${id}`;
+        const totalAmount = perQualifier * maxQualifiers;
+
+        // Read full quest data from contract
+        let description = "";
+        let requirements = "";
+        try {
+            const questData = await context.client.readContract({
+                abi: context.contracts.Quest.abi,
+                address: context.contracts.Quest.address,
+                functionName: "getQuest",
+                args: [id],
+            });
+            description = questData[2]; // description
+            requirements = questData[11]; // requirements
+        } catch (e) {
+            console.error(`Failed to read quest data for ${id}:`, e);
+        }
+
+        await Quest.create({
+            id: questId,
+            data: {
+                creator: creatorAddr,
+                title,
+                description,
+                totalAmount,
+                perQualifier,
+                maxQualifiers,
+                qualifiersCount: 0,
+                deadline,
+                createdAt: event.block.timestamp,
+                resolved: false,
+                cancelled: false,
+                requirements,
+                timestamp: event.block.timestamp,
+            },
+        });
+
+        const user = await getOrCreateUser(User, creatorAddr);
+        await User.update({
+            id: creatorAddr,
+            data: { questsCreated: user.questsCreated + 1 },
+        });
+    } catch (e) {
+        console.error(`Error processing QuestCreated ${id}:`, e);
+    }
+});
+
+ponder.on("Quest:EntrySubmitted", async ({ event, context }) => {
+    const { QuestEntry } = context.db;
+    const { id, solver, ipfsProofCid, socialHandle } = event.args;
+
+    // EntrySubmitted uses quest id as the indexed param, we need to figure out entry index
+    // Read entry count to determine the entry ID
+    let entryId = 0n;
+    try {
+        const count = await context.client.readContract({
+            abi: context.contracts.Quest.abi,
+            address: context.contracts.Quest.address,
+            functionName: "getEntryCount",
+            args: [id],
+        });
+        entryId = count - 1n; // latest entry
+    } catch (_) {}
+
+    const questId = `${context.network.name}-${id}`;
+
+    await QuestEntry.create({
+        id: `${questId}-${entryId}`,
         data: {
-            status: "PENDING_REVEAL",
+            questId,
+            solver: solver.toLowerCase(),
+            ipfsProofCid,
+            socialHandle,
+            timestamp: event.block.timestamp,
+            status: 0, // Pending
         },
     });
+});
 
-    for (let i = 0; i < winners.length; i++) {
-        const subId = submissionIds[i];
-        await Submission.update({
-            id: `${context.network.name}-${bountyId}-${subId}`,
-            data: {
-                isWinner: true,
-            },
+ponder.on("Quest:EntryVerified", async ({ event, context }) => {
+    const { QuestEntry, Quest } = context.db;
+    const { questId, entryId, status } = event.args;
+
+    const netQuestId = `${context.network.name}-${questId}`;
+
+    await QuestEntry.update({
+        id: `${netQuestId}-${entryId}`,
+        data: { status: Number(status) },
+    });
+
+    // If approved, increment qualifiersCount
+    if (Number(status) === 1) {
+        try {
+            const quest = await Quest.findUnique({ id: netQuestId });
+            if (quest) {
+                await Quest.update({
+                    id: netQuestId,
+                    data: { qualifiersCount: quest.qualifiersCount + 1 },
+                });
+            }
+        } catch (_) {}
+    }
+});
+
+ponder.on("Quest:QuestFinalized", async ({ event, context }) => {
+    const { Quest, User } = context.db;
+    const { id, qualifiers, totalDistributed } = event.args;
+
+    const netQuestId = `${context.network.name}-${id}`;
+
+    await Quest.update({
+        id: netQuestId,
+        data: { resolved: true },
+    });
+
+    // Update qualifier stats
+    for (const qualifier of qualifiers) {
+        const addr = qualifier.toLowerCase();
+        const user = await getOrCreateUser(User, addr);
+        await User.update({
+            id: addr,
+            data: { questsCompleted: user.questsCompleted + 1 },
         });
     }
 });
 
-ponder.on("Quinty:SolutionRevealed", async ({ event, context }) => {
-    const { Submission } = context.db;
-    const { bountyId, subId } = event.args;
+ponder.on("Quest:QuestCancelled", async ({ event, context }) => {
+    const { Quest } = context.db;
+    const { id } = event.args;
 
-    await Submission.update({
-        id: `${context.network.name}-${bountyId}-${subId}`,
-        data: {
-            isRevealed: true,
-        },
+    await Quest.update({
+        id: `${context.network.name}-${id}`,
+        data: { cancelled: true },
     });
 });
-
-ponder.on("Quinty:BountyResolved", async ({ event, context }) => {
-    const { Bounty, Submission, User } = context.db;
-    const { bountyId } = event.args;
-
-    const bounty = await Bounty.update({
-        id: `${context.network.name}-${bountyId}`,
-        data: {
-            status: "RESOLVED",
-        },
-    });
-
-    // Update Winner Stats
-    const winners = await Submission.findMany({
-        where: {
-            bountyId: `${context.network.name}-${bountyId}`,
-            isWinner: true,
-        },
-    });
-
-    if (bounty && winners.items.length > 0) {
-        const amountPerWinner = bounty.amount / BigInt(winners.items.length);
-
-        for (const winner of winners.items) {
-            const userId = winner.solver.toLowerCase();
-            const user = await User.findUnique({ id: userId });
-
-            if (user) {
-                await User.update({
-                    id: userId,
-                    data: {
-                        bountiesWon: user.bounties_won + 1,
-                        totalVolumeWon: user.total_volume_won + amountPerWinner,
-                    },
-                });
-            } else {
-                await User.create({
-                    id: userId,
-                    data: {
-                        bountiesCreated: 0,
-                        bountiesWon: 1,
-                        totalVolumeCreated: 0n,
-                        totalVolumeWon: amountPerWinner,
-                    },
-                });
-            }
-        }
-    }
-});
-

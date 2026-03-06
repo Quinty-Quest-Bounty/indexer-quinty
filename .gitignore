@@ -33,3 +33,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Claude / MCP config
+.mcp.json
+CLAUDE.md
