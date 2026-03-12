@@ -311,3 +311,88 @@ ponder.on("Quest:QuestCancelled", async ({ event, context }) => {
         data: { cancelled: true },
     });
 });
+
+// =====================
+// ERC-8004 IDENTITY EVENTS
+// =====================
+
+ponder.on("IdentityRegistry:Registered", async ({ event, context }) => {
+    const { AgentIdentity } = context.db;
+    const { agentId, owner, agentURI } = event.args;
+
+    const id = `${context.network.name}-${agentId}`;
+
+    try {
+        await AgentIdentity.create({
+            id,
+            data: {
+                agentId,
+                owner: owner.toLowerCase(),
+                agentURI,
+                active: true,
+                registeredAt: event.block.timestamp,
+            },
+        });
+    } catch (e) {
+        console.error(`Error processing IdentityRegistry:Registered ${agentId}:`, e);
+    }
+});
+
+ponder.on("IdentityRegistry:Updated", async ({ event, context }) => {
+    const { AgentIdentity } = context.db;
+    const { agentId, agentURI } = event.args;
+
+    const id = `${context.network.name}-${agentId}`;
+
+    try {
+        await AgentIdentity.update({
+            id,
+            data: { agentURI },
+        });
+    } catch (e) {
+        console.error(`Error processing IdentityRegistry:Updated ${agentId}:`, e);
+    }
+});
+
+ponder.on("IdentityRegistry:Deregistered", async ({ event, context }) => {
+    const { AgentIdentity } = context.db;
+    const { agentId } = event.args;
+
+    const id = `${context.network.name}-${agentId}`;
+
+    try {
+        await AgentIdentity.update({
+            id,
+            data: { active: false },
+        });
+    } catch (e) {
+        console.error(`Error processing IdentityRegistry:Deregistered ${agentId}:`, e);
+    }
+});
+
+// =====================
+// ERC-8004 REPUTATION EVENTS
+// =====================
+
+ponder.on("ReputationRegistry:NewFeedback", async ({ event, context }) => {
+    const { AgentReputation } = context.db;
+    const { agentId, from, score, tag1, tag2 } = event.args;
+
+    const id = `${context.network.name}-${agentId}-${event.transaction.hash}`;
+
+    try {
+        await AgentReputation.create({
+            id,
+            data: {
+                agentId,
+                from: from.toLowerCase(),
+                score: BigInt(score),
+                tag1,
+                tag2,
+                timestamp: event.block.timestamp,
+            },
+        });
+    } catch (e) {
+        console.error(`Error processing ReputationRegistry:NewFeedback ${agentId}:`, e);
+    }
+});

@@ -83,4 +83,32 @@ export default createSchema((p) => ({
         questsCreated: p.int(),
         questsCompleted: p.int(),
     }),
+    AgentIdentity: p.createTable(
+        {
+            id: p.string(),           // network-agentId
+            agentId: p.bigint(),
+            owner: p.string(),
+            agentURI: p.string(),
+            active: p.boolean(),
+            registeredAt: p.bigint(),
+        },
+        {
+            ownerIndex: p.index("owner"),
+        }
+    ),
+    AgentReputation: p.createTable(
+        {
+            id: p.string(),           // network-agentId-txHash
+            agentId: p.bigint(),
+            from: p.string(),
+            score: p.bigint(),        // int128 stored as bigint
+            tag1: p.string(),
+            tag2: p.string(),
+            timestamp: p.bigint(),
+        },
+        {
+            agentIdIndex: p.index("agentId"),
+            tag1Index: p.index("tag1"),
+        }
+    ),
 }));
