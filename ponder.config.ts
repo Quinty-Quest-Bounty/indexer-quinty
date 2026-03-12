@@ -4,6 +4,8 @@ import { http } from "viem";
 import { QuintyAbi } from "./abis/Quinty";
 import { QuestAbi } from "./abis/Quest";
 import { QuintyReputationAbi } from "./abis/QuintyReputation";
+import { IdentityRegistryAbi } from "./abis/IdentityRegistry";
+import { ReputationRegistryAbi } from "./abis/ReputationRegistry";
 
 export default createConfig({
     database: {
@@ -40,6 +42,24 @@ export default createConfig({
             network: {
                 baseSepolia: {
                     address: "0xE84dA988177707e9e8371894C082049D2C4F5e5e",
+                    startBlock: 37200000,
+                },
+            },
+        },
+        IdentityRegistry: {
+            abi: IdentityRegistryAbi,
+            network: {
+                baseSepolia: {
+                    address: "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+                    startBlock: 37200000,
+                },
+            },
+        },
+        ReputationRegistry: {
+            abi: ReputationRegistryAbi,
+            network: {
+                baseSepolia: {
+                    address: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
                     startBlock: 37200000,
                 },
             },
